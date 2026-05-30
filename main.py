@@ -1,5 +1,5 @@
 from enum import Enum
-class TOKEN(Enum):
+class TOKEN_KIND(Enum):
     CHAR = 1
     HASH = 2
     STAR = 3
@@ -7,23 +7,37 @@ class TOKEN(Enum):
     BACK_SLASH = 5
     NEW_LINE = 6
     EOF = 7
-    
+
+class token:
+    def __init__(self, token_kind, token):
+        self.token_kind = token_kind
+        self.token = token
+
 def toknize(str):
     token_array = []
+    seen_header = False
+    seen_char = False
     for char in str:
         if char == "#":
-            token_array.append(TOKEN.HASH)
+            seen_header = True
+            if seen_char:
+                token_array.append(token(TOKEN_KIND.CHAR, char))
+            else:
+                token_array.append(token(TOKEN_KIND.HASH, char))
         elif char == "*":
-            token_array.append(TOKEN.STAR)
+            token_array.append(token(TOKEN_KIND.STAR, char))
         elif char == "_":
-            token_array.append(TOKEN.UNDERSCORE)
+            token_array.append(token(TOKEN_KIND.UNDERSCORE, char))
         elif char == "\\":
-            token_array.append(TOKEN.BACK_SLASH)
+            token_array.append(token(TOKEN_KIND.BACK_SLASH, char))
         elif char == "\n":
-            token_array.append(TOKEN.NEW_LINE)
+            token_array.append(token(TOKEN_KIND.NEW_LINE, char))
         else:
-            token_array.append(TOKEN.CHAR)
-    token_array.append(TOKEN.EOF)
+            if seen_header:
+                seen_char = True
+            token_array.append(token(TOKEN_KIND.CHAR, char))
+            
+    token_array.append(token(TOKEN_KIND.EOF, "EOF"))
     return token_array
     
 def token_peek(token_array):
@@ -32,37 +46,43 @@ def token_peek(token_array):
 def token_next(token_array):
     return token_array[1]
     
+def search_through_tokens(token_array, token_kind):
+    for token in token_array:
+        if token.token_kind == token_kind:
+            return True
+    return False
+    
 def parse_hdr(token_array, hdr_cnt):
-    if token_peek(token_array) != TOKEN.HASH:
+    if token_peek(token_array).token_kind != TOKEN_KIND.HASH:
         return hdr_cnt
     return parse_hdr(token_array[1:], hdr_cnt + 1)
 
 def parse_star(token_array, star_cnt):
-    if token_peek(token_array) != TOKEN.STAR:
+    if token_peek(token_array).token_kind != TOKEN_KIND.STAR:
         return star_cnt
     return parse_star(token_array[1:], star_cnt + 1)
     
-def parse(token_array, input_str, output_str, token_stack, back_track = False, heady = False):
-    if token_peek(token_array) == TOKEN.HASH:
+def parse(token_array, output_str, token_stack, back_track = False):
+    if token_peek(token_array).token_kind == TOKEN_KIND.HASH:
 
         hdr_cnt = parse_hdr(token_array, 0)
-        if hdr_cnt > 6 or heady:
+        if hdr_cnt > 6:
             output_str = output_str + '#' * hdr_cnt
-            return parse(token_array[hdr_cnt:], input_str[hdr_cnt:], output_str, token_stack, False, True)
+            return parse(token_array[hdr_cnt:], output_str, token_stack, False)
         else:
-            if input_str[hdr_cnt] != ' ':
+            if token_array[hdr_cnt].token != ' ':
                 output_str = output_str + '#' * hdr_cnt
-                return parse(token_array[hdr_cnt:], input_str[hdr_cnt:], output_str, token_stack, False, True)
+                return parse(token_array[hdr_cnt:], output_str, token_stack, False)
         
         output_str = output_str + f"<h{hdr_cnt}>"
         token_stack.append(f"h{hdr_cnt}")
         
         # +1 to remove space
-        return parse(token_array[hdr_cnt + 1:], input_str[hdr_cnt + 1:], output_str, token_stack, False, True)
+        return parse(token_array[hdr_cnt + 1:], output_str, token_stack, False)
         
-    elif token_peek(token_array) == TOKEN.STAR:
+    elif token_peek(token_array).token_kind == TOKEN_KIND.STAR:
         if back_track:
-            return parse(token_array[1:], input_str[1:], output_str, token_stack, True, heady)
+            return parse(token_array[1:], output_str, token_stack, True)
             
         star_cnt = parse_star(token_array, 0)
         if star_cnt == 1:
@@ -75,34 +95,34 @@ def parse(token_array, input_str, output_str, token_stack, back_track = False, h
             output_str = output_str + "<b><i>"
             token_stack.append("bi")
             
-        return parse(token_array[star_cnt:], input_str[star_cnt:], output_str, token_stack, False, heady)
+        return parse(token_array[star_cnt:], output_str, token_stack, False)
         
-    elif token_peek(token_array) == TOKEN.UNDERSCORE:
+    elif token_peek(token_array).token_kind == TOKEN_KIND.UNDERSCORE:
         if back_track:
-            return parse(token_array[1:], input_str[1:], output_str, token_stack, True, heady)
+            return parse(token_array[1:], output_str, token_stack, True)
         output_str = output_str + "<u>"
         token_stack.append("u")
-        return parse(token_array[1:], input_str[1:], output_str, token_stack, False, heady)
+        return parse(token_array[1:], output_str, token_stack, False)
         
-    elif token_peek(token_array) == TOKEN.BACK_SLASH:
-        if token_next(token_array) != TOKEN.CHAR:
-            output_str = output_str + input_str[1]
-            return parse(token_array[2:], input_str[2:], output_str, token_stack, False, heady)
-        output_str = output_str + input_str[0]
-        return parse(token_array[1:], input_str[1:], output_str, token_stack, False, heady)
+    elif token_peek(token_array).token_kind == TOKEN_KIND.BACK_SLASH:
+        if token_next(token_array).token_kind != TOKEN_KIND.CHAR:
+            output_str = output_str + token_array[1].token
+            return parse(token_array[2:], output_str, token_stack, False)
+        output_str = output_str + token_array[0].token
+        return parse(token_array[1:], output_str, token_stack, False)
         
-    elif token_peek(token_array) == TOKEN.NEW_LINE:
+    elif token_peek(token_array).token_kind == TOKEN_KIND.NEW_LINE:
         output_str = output_str + "<br/>"
-        return parse(token_array[1:], input_str[1:], output_str, token_stack, False, heady)
+        return parse(token_array[1:], output_str, token_stack, False)
         
-    elif token_peek(token_array) == TOKEN.CHAR:
-        output_str = output_str + input_str[0]
-        if token_next(token_array) != TOKEN.CHAR and (TOKEN.CHAR not in token_array[1:]):
-            return parse(token_array[1:], input_str[1:], output_str, token_stack, True, heady)
+    elif token_peek(token_array).token_kind == TOKEN_KIND.CHAR:
+        output_str = output_str + token_array[0].token
+        if token_next(token_array).token_kind != TOKEN_KIND.CHAR and(not search_through_tokens(token_array[1:], TOKEN_KIND.CHAR)):
+            return parse(token_array[1:], output_str, token_stack, True)
     
-        return parse(token_array[1:], input_str[1:], output_str, token_stack, False, heady)
+        return parse(token_array[1:], output_str, token_stack, False)
         
-    elif token_peek(token_array) == TOKEN.EOF:
+    elif token_peek(token_array).token_kind == TOKEN_KIND.EOF:
         if not token_stack:
             return output_str
         else:
@@ -117,14 +137,14 @@ def parse(token_array, input_str, output_str, token_stack, back_track = False, h
             elif token_stack[-1] == "u":
                 output_str = output_str + "</u>"
 
-            return parse(token_array, input_str, output_str, token_stack[:-1], False, heady)
+            return parse(token_array, output_str, token_stack[:-1], False)
 
 def parse_markdown(str):
     token_array = toknize(str)
-    output_str = parse(token_array, str, "", [], False)
+    output_str = parse(token_array, "", [], False)
     return output_str
 
-    
+
 assert parse_markdown("# H1") == "<h1>H1</h1>"
 assert parse_markdown("## H1") == "<h2>H1</h2>"
 assert parse_markdown("### H1") == "<h3>H1</h3>"
@@ -140,3 +160,4 @@ assert parse_markdown("## *Hello from python*") == "<h2><i>Hello from python</i>
 assert parse_markdown("## *Hello from **python***") == "<h2><i>Hello from <b>python</b></i></h2>"
 assert parse_markdown("_meow_") == "<u>meow</u>"
 assert parse_markdown("**_meow_**") == "<b><u>meow</u></b>"
+assert parse_markdown("# WHAT #") == "<h1>WHAT #</h1>"
