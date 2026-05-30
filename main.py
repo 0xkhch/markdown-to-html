@@ -42,26 +42,27 @@ def parse_star(token_array, star_cnt):
         return star_cnt
     return parse_star(token_array[1:], star_cnt + 1)
     
-def parse(token_array, input_str, output_str, token_stack, back_track = False):
+def parse(token_array, input_str, output_str, token_stack, back_track = False, heady = False):
     if token_peek(token_array) == TOKEN.HASH:
+
         hdr_cnt = parse_hdr(token_array, 0)
-        if hdr_cnt > 6:
+        if hdr_cnt > 6 or heady:
             output_str = output_str + '#' * hdr_cnt
-            return parse(token_array[hdr_cnt:], input_str[hdr_cnt:], output_str, token_stack, False)
+            return parse(token_array[hdr_cnt:], input_str[hdr_cnt:], output_str, token_stack, False, True)
         else:
             if input_str[hdr_cnt] != ' ':
                 output_str = output_str + '#' * hdr_cnt
-                return parse(token_array[hdr_cnt:], input_str[hdr_cnt:], output_str, token_stack, False)
+                return parse(token_array[hdr_cnt:], input_str[hdr_cnt:], output_str, token_stack, False, True)
         
         output_str = output_str + f"<h{hdr_cnt}>"
         token_stack.append(f"h{hdr_cnt}")
         
         # +1 to remove space
-        return parse(token_array[hdr_cnt + 1:], input_str[hdr_cnt + 1:], output_str, token_stack, False)
+        return parse(token_array[hdr_cnt + 1:], input_str[hdr_cnt + 1:], output_str, token_stack, False, True)
         
     elif token_peek(token_array) == TOKEN.STAR:
         if back_track:
-            return parse(token_array[1:], input_str[1:], output_str, token_stack, True)
+            return parse(token_array[1:], input_str[1:], output_str, token_stack, True, heady)
             
         star_cnt = parse_star(token_array, 0)
         if star_cnt == 1:
@@ -74,32 +75,32 @@ def parse(token_array, input_str, output_str, token_stack, back_track = False):
             output_str = output_str + "<b><i>"
             token_stack.append("bi")
             
-        return parse(token_array[star_cnt:], input_str[star_cnt:], output_str, token_stack, False)
+        return parse(token_array[star_cnt:], input_str[star_cnt:], output_str, token_stack, False, heady)
         
     elif token_peek(token_array) == TOKEN.UNDERSCORE:
         if back_track:
-            return parse(token_array[1:], input_str[1:], output_str, token_stack, True)
+            return parse(token_array[1:], input_str[1:], output_str, token_stack, True, heady)
         output_str = output_str + "<u>"
         token_stack.append("u")
-        return parse(token_array[1:], input_str[1:], output_str, token_stack, False)
+        return parse(token_array[1:], input_str[1:], output_str, token_stack, False, heady)
         
     elif token_peek(token_array) == TOKEN.BACK_SLASH:
         if token_next(token_array) != TOKEN.CHAR:
             output_str = output_str + input_str[1]
-            return parse(token_array[2:], input_str[2:], output_str, token_stack, False)
+            return parse(token_array[2:], input_str[2:], output_str, token_stack, False, heady)
         output_str = output_str + input_str[0]
-        return parse(token_array[1:], input_str[1:], output_str, token_stack, False)
+        return parse(token_array[1:], input_str[1:], output_str, token_stack, False, heady)
         
     elif token_peek(token_array) == TOKEN.NEW_LINE:
         output_str = output_str + "<br/>"
-        return parse(token_array[1:], input_str[1:], output_str, token_stack, False)
+        return parse(token_array[1:], input_str[1:], output_str, token_stack, False, heady)
         
     elif token_peek(token_array) == TOKEN.CHAR:
         output_str = output_str + input_str[0]
         if token_next(token_array) != TOKEN.CHAR and (TOKEN.CHAR not in token_array[1:]):
-            return parse(token_array[1:], input_str[1:], output_str, token_stack, True)
+            return parse(token_array[1:], input_str[1:], output_str, token_stack, True, heady)
     
-        return parse(token_array[1:], input_str[1:], output_str, token_stack, False)
+        return parse(token_array[1:], input_str[1:], output_str, token_stack, False, heady)
         
     elif token_peek(token_array) == TOKEN.EOF:
         if not token_stack:
@@ -116,12 +117,13 @@ def parse(token_array, input_str, output_str, token_stack, back_track = False):
             elif token_stack[-1] == "u":
                 output_str = output_str + "</u>"
 
-            return parse(token_array, input_str, output_str, token_stack[:-1], False)
+            return parse(token_array, input_str, output_str, token_stack[:-1], False, heady)
 
 def parse_markdown(str):
     token_array = toknize(str)
-    output_str = parse(token_array, str, "", [])
+    output_str = parse(token_array, str, "", [], False)
     return output_str
+
     
 assert parse_markdown("# H1") == "<h1>H1</h1>"
 assert parse_markdown("## H1") == "<h2>H1</h2>"
